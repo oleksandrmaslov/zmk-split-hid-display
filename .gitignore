@@ -1,0 +1,11 @@
+build/
+.west/
+modules/
+tools/
+zmk/
+*.bin
+*.elf
+*.hex
+*.uf2
+*.map
+*.log

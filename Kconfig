@@ -1,0 +1,155 @@
+# Copyright (c) 2026 The ZMK Contributors
+# SPDX-License-Identifier: MIT
+
+menu "ZMK split HID display"
+
+DT_COMPAT_ZMK_SPLT_PERIPHERAL_OUTPUT_RELAY := zmk,split-peripheral-output-relay
+
+config ZMK_SPLT_PERIPHERAL_OUTPUT_RELAY
+    bool
+    default $(dt_compat_enabled,$(DT_COMPAT_ZMK_SPLT_PERIPHERAL_OUTPUT_RELAY))
+
+config ZMK_SPLIT_SPLT_PERIPHERAL_OUTPUT_QUEUE_SIZE
+    int "Max number of split peripheral output events to queue when received from central"
+    default 5
+
+config ZMK_SPLIT_PERIPHERAL_OUTPUT_MAX_PAYLOAD
+    int "Maximum payload size forwarded to split peripheral outputs"
+    default 32
+    range 0 244
+    help
+      Defines the maximum number of payload bytes carried with a split
+      peripheral output event. Keep this at or above your Raw HID report size
+      when forwarding Raw HID data to a peripheral display.
+
+config RAW_HID
+    bool "Enable Raw HID"
+    imply USB_DEVICE_HID
+
+config RAW_HID_USAGE_PAGE
+    hex "Raw HID Usage Page"
+    default 0xFF60
+    depends on RAW_HID
+
+config RAW_HID_USAGE
+    hex "Raw HID Usage"
+    default 0x61
+    depends on RAW_HID
+
+config RAW_HID_REPORT_SIZE
+    int "Raw HID Report Size"
+    default 32
+    depends on RAW_HID
+
+config RAW_HID_DEVICE
+    string "Raw HID Device"
+    default HID_1
+    depends on RAW_HID
+
+config RAW_HID_FORWARD_TO_PERIPHERAL
+    bool "Relay Raw HID reports to split peripheral over output relay"
+    depends on RAW_HID && ZMK_SPLIT && ZMK_SPLT_PERIPHERAL_OUTPUT_RELAY
+    default y
+    help
+      When enabled, Raw HID reports received on the central half are forwarded to
+      connected peripherals via the split peripheral output relay channel. The
+      peripheral can then surface the data, for example on a display.
+
+config RAW_HID_SPLIT_RELAY_CHANNEL
+    int "Relay channel used for Raw HID forwarding"
+    depends on RAW_HID_FORWARD_TO_PERIPHERAL
+    range 0 255
+    default 1
+    help
+      Relay channel identifier used when sending Raw HID payloads to peripherals.
+      The same channel must be handled on the peripheral side to consume the
+      forwarded data.
+
+config NICE_VIEW_HID
+    bool "Enable nice!view display with Raw HID"
+    imply ZMK_DISPLAY
+    select LV_USE_IMAGE
+    select LV_USE_CANVAS
+    select LV_FONT_MONTSERRAT_14
+    select LV_FONT_MONTSERRAT_16
+    select LV_FONT_MONTSERRAT_18
+    select LV_FONT_MONTSERRAT_20
+    select LV_FONT_MONTSERRAT_22
+
+config NICE_VIEW_HID_TWO_PROFILES
+    bool "Limit displayed profiles to two"
+    depends on NICE_VIEW_HID
+
+config NICE_VIEW_HID_SHOW_LAYOUT
+    bool "Show layout"
+    default y
+    depends on NICE_VIEW_HID
+
+config NICE_VIEW_HID_LAYOUTS
+    string "Comma-separated layout list"
+    default "EN"
+    depends on NICE_VIEW_HID
+
+config NICE_VIEW_HID_INVERTED
+    bool "Invert widget colors"
+    depends on NICE_VIEW_HID
+
+config NICE_VIEW_HID_MEDIA_SCROLL
+    bool "Scroll overflowing media text"
+    default y
+    depends on NICE_VIEW_HID
+
+config NICE_VIEW_HID_MEDIA_SCROLL_INTERVAL_MS
+    int "Media scroll interval"
+    default 350
+    depends on NICE_VIEW_HID_MEDIA_SCROLL
+
+config NICE_VIEW_HID_MEDIA_SCROLL_START_PAUSE_STEPS
+    int "Media scroll start pause steps"
+    default 3
+    range 0 60
+    depends on NICE_VIEW_HID_MEDIA_SCROLL
+    help
+      Number of scroll timer ticks to keep overflowing media text at the
+      beginning of the string before it starts moving.
+
+config NICE_VIEW_HID_MEDIA_SCROLL_END_PAUSE_STEPS
+    int "Media scroll end pause steps"
+    default 10
+    range 0 60
+    depends on NICE_VIEW_HID_MEDIA_SCROLL
+    help
+      Number of scroll timer ticks to show a blank gap after overflowing
+      media text has scrolled off before the next loop starts.
+
+config NICE_VIEW_HID_MEDIA_SCROLL_MIN_BATTERY
+    int "Minimum battery percentage for media scrolling"
+    range 0 100
+    default 25
+    depends on NICE_VIEW_HID_MEDIA_SCROLL
+
+config LV_DPI_DEF
+    default 161
+
+config LV_Z_VDB_SIZE
+    default 100
+
+config LV_Z_BITS_PER_PIXEL
+    default 1
+
+config LV_Z_MEM_POOL_SIZE
+    default 4096
+
+choice LV_COLOR_DEPTH
+    default LV_COLOR_DEPTH_1
+endchoice
+
+choice ZMK_DISPLAY_WORK_QUEUE
+    default ZMK_DISPLAY_WORK_QUEUE_DEDICATED
+endchoice
+
+choice ZMK_DISPLAY_STATUS_SCREEN
+    default ZMK_DISPLAY_STATUS_SCREEN_CUSTOM
+endchoice
+
+endmenu

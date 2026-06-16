@@ -1,0 +1,4 @@
+#pragma once
+
+#define RAW_HID_SPLIT_CHUNK_VALUE 0xF0
+#define RAW_HID_SPLIT_CHUNK_HEADER_SIZE 3
