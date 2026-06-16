@@ -107,10 +107,10 @@ Keep your normal keyboard shield names and add both adapter shields:
 
 ```yaml
 include:
-  - board: nice_nano//zmk
+  - board: nice_nano
     shield: corne_left nice_view_adapter nice_view_hid_adapter raw_hid_adapter
 
-  - board: nice_nano//zmk
+  - board: nice_nano
     shield: corne_right nice_view_adapter nice_view_hid_adapter raw_hid_adapter
 ```
 
