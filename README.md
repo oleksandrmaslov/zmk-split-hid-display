@@ -47,6 +47,8 @@ This module is an integration and fork of work from the ZMK community:
   [zzeneg/zmk-nice-view-hid](https://github.com/zzeneg/zmk-nice-view-hid).
 - Split peripheral output relay support is based on
   [badjeff/zmk-split-peripheral-output-relay](https://github.com/badjeff/zmk-split-peripheral-output-relay).
+- Battery icons and BLE states are based on
+  [kevinpastor/nice-view-elemental](https://github.com/kevinpastor/nice-view-elemental)
 
 The relay in this module has been extended for this keyboard use case: instead
 of only sending a simple output value such as a motor or haptic signal, it can
