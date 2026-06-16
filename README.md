@@ -172,8 +172,11 @@ See [`examples/split-hid-display.overlay`](examples/split-hid-display.overlay).
 
 ### 5. Send Data From The Host
 
-Use a companion host app that can open the Raw HID interface and send reports
-with:
+Use a companion host app that can open the Raw HID interface and send reports.
+The intended companion app is
+[zzeneg/qmk-hid-host](https://github.com/zzeneg/qmk-hid-host).
+
+The keyboard Raw HID interface uses:
 
 - Usage page: `0xFF60`
 - Usage: `0x61`
