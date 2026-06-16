@@ -1,0 +1,9 @@
+/* Add this node to both split-half overlays. */
+
+/ {
+    rawhid_or: rawhid_or {
+        compatible = "zmk,split-peripheral-output-relay";
+        relay-channel = <1>;
+        device = <&nice_view>;
+    };
+};
