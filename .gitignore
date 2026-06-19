@@ -2,7 +2,7 @@ build/
 .west/
 modules/
 tools/
-zmk/
+/zmk/
 *.bin
 *.elf
 *.hex
