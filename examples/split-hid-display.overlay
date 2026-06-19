@@ -1,4 +1,4 @@
-/* Add this node to both split-half overlays. */
+/* The raw_hid shield provides this node by default. Use this only as a custom override. */
 
 / {
     rawhid_or: rawhid_or {

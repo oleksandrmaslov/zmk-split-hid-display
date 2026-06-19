@@ -1,1 +1,7 @@
-/* Raw HID is enabled through Kconfig; this shield has no devicetree nodes. */
+/ {
+    rawhid_or: rawhid_or {
+        compatible = "zmk,split-peripheral-output-relay";
+        relay-channel = <1>;
+        device = <&nice_view>;
+    };
+};

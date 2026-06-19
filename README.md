@@ -151,22 +151,11 @@ CONFIG_NICE_VIEW_HID_LAYOUTS="us,ru,de,ua"
 
 See [`examples/split-hid-display.conf`](examples/split-hid-display.conf).
 
-### 4. Add The Relay Node On Both Halves
+### 4. Relay Node
 
-Each split-half overlay needs a relay node. The `relay-channel` value defaults
-to `1`; if you override it, it must match `CONFIG_RAW_HID_SPLIT_RELAY_CHANNEL`.
-
-```dts
-/ {
-    rawhid_or: rawhid_or {
-        compatible = "zmk,split-peripheral-output-relay";
-        relay-channel = <1>;
-        device = <&nice_view>;
-    };
-};
-```
-
-See [`examples/split-hid-display.overlay`](examples/split-hid-display.overlay).
+The `raw_hid` shield provides the default split output relay node on channel
+`1`. If you override the relay channel, keep the overlay `relay-channel` value
+and `CONFIG_RAW_HID_SPLIT_RELAY_CHANNEL` in sync.
 
 ### 5. Send Data From The Host
 

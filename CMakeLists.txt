@@ -22,7 +22,8 @@ if(CONFIG_RAW_HID)
     zephyr_library_sources(src/hog.c)
   endif()
 
-  if(CONFIG_RAW_HID_FORWARD_TO_PERIPHERAL AND CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+  if(CONFIG_RAW_HID_FORWARD_TO_PERIPHERAL AND CONFIG_ZMK_SPLT_PERIPHERAL_OUTPUT_RELAY AND
+     CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
     zephyr_library_sources(src/split_bridge.c)
   endif()
 endif()
