@@ -1,0 +1,5 @@
+file_format: "1"
+id: raw_hid
+name: Raw HID
+type: shield
+url: https://github.com/oleksandrmaslov/zmk-split-hid-display

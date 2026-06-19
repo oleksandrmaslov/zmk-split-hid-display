@@ -1,4 +1,4 @@
-if SHIELD_RAW_HID_ADAPTER
+if SHIELD_RAW_HID
 
 config RAW_HID
     default y

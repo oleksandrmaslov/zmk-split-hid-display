@@ -1,10 +1,13 @@
-if SHIELD_NICE_VIEW_HID_ADAPTER
+if SHIELD_NICE_VIEW_HID
 
 config ZMK_DISPLAY
     default y
 
 config NICE_VIEW_HID
     default y
+
+config LS0XX_VCOM_THREAD_PRIO
+    default 11
 
 config NICE_VIEW_HID_MEDIA_SCROLL
     default y
@@ -24,21 +27,25 @@ config NICE_VIEW_HID_MEDIA_SCROLL_MIN_BATTERY
 config ZMK_DISPLAY_BLANK_ON_IDLE
     default n
 
+config ZMK_DISPLAY_DEDICATED_THREAD_STACK_SIZE
+    default 4096
+
 choice ZMK_DISPLAY_STATUS_SCREEN
     default ZMK_DISPLAY_STATUS_SCREEN_CUSTOM
 endchoice
 
-config LV_DPI_DEF
-    default 161
-
 config LV_Z_VDB_SIZE
     default 100
+
+config LV_DPI_DEF
+    default 161
 
 config LV_Z_BITS_PER_PIXEL
     default 1
 
 config LV_Z_MEM_POOL_SIZE
-    default 4096
+    default 8192 if ZMK_DISPLAY_STATUS_SCREEN_CUSTOM
+    default 5120 if ZMK_DISPLAY_STATUS_SCREEN_BUILT_IN
 
 choice LV_COLOR_DEPTH
     default LV_COLOR_DEPTH_1

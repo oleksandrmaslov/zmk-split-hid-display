@@ -1,0 +1,8 @@
+file_format: "1"
+id: nice_view_hid
+name: nice!view HID
+type: shield
+url: https://github.com/oleksandrmaslov/zmk-split-hid-display
+requires: [i2c_oled]
+features:
+  - display

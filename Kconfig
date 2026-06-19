@@ -140,7 +140,8 @@ config LV_Z_BITS_PER_PIXEL
     default 1
 
 config LV_Z_MEM_POOL_SIZE
-    default 4096
+    default 8192 if ZMK_DISPLAY_STATUS_SCREEN_CUSTOM
+    default 5120 if ZMK_DISPLAY_STATUS_SCREEN_BUILT_IN
 
 choice LV_COLOR_DEPTH
     default LV_COLOR_DEPTH_1

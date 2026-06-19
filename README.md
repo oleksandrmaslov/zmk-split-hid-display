@@ -101,17 +101,18 @@ Then update modules:
 west update
 ```
 
-### 2. Add The Adapter Shields To `build.yaml`
+### 2. Add The Module Shields To `build.yaml`
 
-Keep your normal keyboard shield names and add both adapter shields:
+For nice!nano builds, keep your normal keyboard shield names and add both module
+shields:
 
 ```yaml
 include:
   - board: nice_nano//zmk
-    shield: corne_left nice_view_hid_adapter raw_hid_adapter
+    shield: corne_left nice_view_hid raw_hid
 
   - board: nice_nano//zmk
-    shield: corne_right nice_view_hid_adapter raw_hid_adapter
+    shield: corne_right nice_view_hid raw_hid
 ```
 
 For a custom shield, keep your custom left/right names:
@@ -119,11 +120,16 @@ For a custom shield, keep your custom left/right names:
 ```yaml
 include:
   - board: nice_nano//zmk
-    shield: corne_widgets_left nice_view_hid_adapter raw_hid_adapter
+    shield: corne_widgets_left nice_view_hid raw_hid
 
   - board: nice_nano//zmk
-    shield: corne_widgets_right nice_view_hid_adapter raw_hid_adapter
+    shield: corne_widgets_right nice_view_hid raw_hid
 ```
+
+`nice_view_hid` is this module's equivalent of ZMK main's `nice_view` display
+shield. It includes the nice!nano `nice_view_spi` bus mapping and the LS0xx
+display node. For other controllers, provide an equivalent `nice_view_spi` node
+in a board-specific overlay before using this shield.
 
 For current ZMK `main` builds, use the ZMK board variant form such as
 `nice_nano//zmk`. Plain `nice_nano` and old `nice_nano_v2` targets select the
@@ -133,7 +139,7 @@ See [`examples/build.yaml`](examples/build.yaml) for a minimal matrix.
 
 ### 3. Override Module Defaults If Needed
 
-The adapter shields provide the normal display, Raw HID, split relay, and media
+The module shields provide the normal display, Raw HID, split relay, and media
 scroll defaults automatically. Add only the options you want to override in your
 keyboard or shield config.
 
@@ -231,7 +237,7 @@ Long media strings use a character-window marquee:
 
 | Name | Description | Default |
 | --- | --- | --- |
-| `CONFIG_RAW_HID` | Enable Raw HID transport | `n`, `y` with `raw_hid_adapter` |
+| `CONFIG_RAW_HID` | Enable Raw HID transport | `n`, `y` with `raw_hid` |
 | `CONFIG_RAW_HID_USAGE_PAGE` | HID usage page | `0xFF60` |
 | `CONFIG_RAW_HID_USAGE` | HID usage | `0x61` |
 | `CONFIG_RAW_HID_REPORT_SIZE` | Raw HID report size in bytes | `32` |
@@ -240,7 +246,7 @@ Long media strings use a character-window marquee:
 | `CONFIG_RAW_HID_SPLIT_RELAY_CHANNEL` | Relay channel for Raw HID forwarding | `1` |
 | `CONFIG_ZMK_SPLIT_PERIPHERAL_OUTPUT_MAX_PAYLOAD` | Max relay payload bytes | `64` |
 | `CONFIG_ZMK_SPLIT_SPLT_PERIPHERAL_OUTPUT_QUEUE_SIZE` | Peripheral output queue depth | `5` |
-| `CONFIG_NICE_VIEW_HID` | Enable the custom nice!view status screen | `n`, `y` with `nice_view_hid_adapter` |
+| `CONFIG_NICE_VIEW_HID` | Enable the custom nice!view status screen | `n`, `y` with `nice_view_hid` |
 | `CONFIG_NICE_VIEW_HID_TWO_PROFILES` | Limit displayed profiles to two | `n` |
 | `CONFIG_NICE_VIEW_HID_SHOW_LAYOUT` | Show host layout name | `y` |
 | `CONFIG_NICE_VIEW_HID_LAYOUTS` | Comma-separated layout names | `EN` |
@@ -262,7 +268,7 @@ If the central updates but the peripheral does not:
 
 If the Raw HID interface is missing:
 
-- Confirm `raw_hid_adapter` is in the shield list.
+- Confirm `raw_hid` is in the shield list.
 - Confirm `CONFIG_RAW_HID=y`.
 - Confirm your board config allows a second USB HID device.
 

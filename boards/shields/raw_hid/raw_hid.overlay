@@ -1,0 +1,1 @@
+/* Raw HID is enabled through Kconfig; this shield has no devicetree nodes. */

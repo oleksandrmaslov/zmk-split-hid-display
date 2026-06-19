@@ -20,7 +20,7 @@
 ---
 include:
   - board: nice_nano//zmk
-    shield: corne_left nice_view_hid_adapter raw_hid_adapter
+    shield: corne_left nice_view_hid raw_hid
 
   - board: nice_nano//zmk
-    shield: corne_right nice_view_hid_adapter raw_hid_adapter
+    shield: corne_right nice_view_hid raw_hid

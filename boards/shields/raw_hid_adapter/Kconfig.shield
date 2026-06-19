@@ -1,2 +1,0 @@
-config SHIELD_RAW_HID_ADAPTER
-    def_bool $(shields_list_contains,raw_hid_adapter)
