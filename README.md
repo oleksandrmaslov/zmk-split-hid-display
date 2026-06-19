@@ -103,16 +103,16 @@ west update
 
 ### 2. Add The Module Shields To `build.yaml`
 
-For nice!nano builds, keep your normal keyboard shield names and add both module
-shields:
+For nice!nano builds, keep your normal keyboard shield names and add the
+nice!view HID bus adapter, nice!view HID display shield, and Raw HID shield:
 
 ```yaml
 include:
   - board: nice_nano//zmk
-    shield: corne_left nice_view_hid raw_hid
+    shield: corne_left nice_view_hid_adapter nice_view_hid raw_hid
 
   - board: nice_nano//zmk
-    shield: corne_right nice_view_hid raw_hid
+    shield: corne_right nice_view_hid_adapter nice_view_hid raw_hid
 ```
 
 For a custom shield, keep your custom left/right names:
@@ -120,16 +120,16 @@ For a custom shield, keep your custom left/right names:
 ```yaml
 include:
   - board: nice_nano//zmk
-    shield: corne_widgets_left nice_view_hid raw_hid
+    shield: corne_widgets_left nice_view_hid_adapter nice_view_hid raw_hid
 
   - board: nice_nano//zmk
-    shield: corne_widgets_right nice_view_hid raw_hid
+    shield: corne_widgets_right nice_view_hid_adapter nice_view_hid raw_hid
 ```
 
-`nice_view_hid` is this module's equivalent of ZMK main's `nice_view` display
-shield. It includes the nice!nano `nice_view_spi` bus mapping and the LS0xx
-display node. For other controllers, provide an equivalent `nice_view_spi` node
-in a board-specific overlay before using this shield.
+This mirrors ZMK main's `nice_view_adapter nice_view` split:
+`nice_view_hid_adapter` provides the nice!nano `nice_view_spi` bus mapping, and
+`nice_view_hid` provides the LS0xx display node plus this module's HID status
+screen.
 
 For current ZMK `main` builds, use the ZMK board variant form such as
 `nice_nano//zmk`. Plain `nice_nano` and old `nice_nano_v2` targets select the
