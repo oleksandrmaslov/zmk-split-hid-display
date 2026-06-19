@@ -2,8 +2,8 @@
 # Adjust the board and base shield names to match your keyboard.
 ---
 include:
-  - board: nice_nano
+  - board: nice_nano//zmk
     shield: corne_left nice_view_hid_adapter raw_hid_adapter
 
-  - board: nice_nano
+  - board: nice_nano//zmk
     shield: corne_right nice_view_hid_adapter raw_hid_adapter

@@ -1,0 +1,21 @@
+if SHIELD_RAW_HID_ADAPTER
+
+config RAW_HID
+    default y
+
+config RAW_HID_REPORT_SIZE
+    default 32
+
+config RAW_HID_FORWARD_TO_PERIPHERAL
+    default y
+
+config RAW_HID_SPLIT_RELAY_CHANNEL
+    default 1
+
+config ZMK_SPLIT_PERIPHERAL_OUTPUT_MAX_PAYLOAD
+    default 64
+
+config USB_HID_DEVICE_COUNT
+    default 2
+
+endif

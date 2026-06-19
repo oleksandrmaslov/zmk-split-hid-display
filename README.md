@@ -107,11 +107,11 @@ Keep your normal keyboard shield names and add both adapter shields:
 
 ```yaml
 include:
-  - board: nice_nano
-    shield: corne_left nice_view_adapter nice_view_hid_adapter raw_hid_adapter
+  - board: nice_nano//zmk
+    shield: corne_left nice_view_hid_adapter raw_hid_adapter
 
-  - board: nice_nano
-    shield: corne_right nice_view_adapter nice_view_hid_adapter raw_hid_adapter
+  - board: nice_nano//zmk
+    shield: corne_right nice_view_hid_adapter raw_hid_adapter
 ```
 
 For a custom shield, keep your custom left/right names:
@@ -119,37 +119,27 @@ For a custom shield, keep your custom left/right names:
 ```yaml
 include:
   - board: nice_nano//zmk
-    shield: corne_widgets_left nice_view_adapter nice_view_hid_adapter raw_hid_adapter
+    shield: corne_widgets_left nice_view_hid_adapter raw_hid_adapter
 
   - board: nice_nano//zmk
-    shield: corne_widgets_right nice_view_adapter nice_view_hid_adapter raw_hid_adapter
+    shield: corne_widgets_right nice_view_hid_adapter raw_hid_adapter
 ```
 
-Use the same board spelling your ZMK config already uses. Older configs may use
-`nice_nano_v2`; newer configs often use `nice_nano//zmk`.
+For current ZMK `main` builds, use the ZMK board variant form such as
+`nice_nano//zmk`. Plain `nice_nano` and old `nice_nano_v2` targets select the
+non-ZMK board and fail the ZMK board compatibility check.
 
 See [`examples/build.yaml`](examples/build.yaml) for a minimal matrix.
 
-### 3. Enable The Module Features
+### 3. Override Module Defaults If Needed
 
-Add the display and Raw HID options to your keyboard or shield config:
+The adapter shields provide the normal display, Raw HID, split relay, and media
+scroll defaults automatically. Add only the options you want to override in your
+keyboard or shield config.
+
+For example, to customize host layout labels:
 
 ```conf
-CONFIG_ZMK_DISPLAY=y
-CONFIG_NICE_VIEW_HID=y
-CONFIG_RAW_HID=y
-CONFIG_RAW_HID_REPORT_SIZE=32
-
-CONFIG_RAW_HID_FORWARD_TO_PERIPHERAL=y
-CONFIG_RAW_HID_SPLIT_RELAY_CHANNEL=1
-CONFIG_ZMK_SPLIT_PERIPHERAL_OUTPUT_MAX_PAYLOAD=64
-
-CONFIG_NICE_VIEW_HID_MEDIA_SCROLL=y
-CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_INTERVAL_MS=350
-CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_START_PAUSE_STEPS=3
-CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_END_PAUSE_STEPS=10
-CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_MIN_BATTERY=25
-
 CONFIG_NICE_VIEW_HID_LAYOUTS="us,ru,de,ua"
 ```
 
@@ -241,16 +231,16 @@ Long media strings use a character-window marquee:
 
 | Name | Description | Default |
 | --- | --- | --- |
-| `CONFIG_RAW_HID` | Enable Raw HID transport | `n` |
+| `CONFIG_RAW_HID` | Enable Raw HID transport | `n`, `y` with `raw_hid_adapter` |
 | `CONFIG_RAW_HID_USAGE_PAGE` | HID usage page | `0xFF60` |
 | `CONFIG_RAW_HID_USAGE` | HID usage | `0x61` |
 | `CONFIG_RAW_HID_REPORT_SIZE` | Raw HID report size in bytes | `32` |
 | `CONFIG_RAW_HID_DEVICE` | USB HID device binding used for Raw HID | `HID_1` |
 | `CONFIG_RAW_HID_FORWARD_TO_PERIPHERAL` | Forward central Raw HID reports to split peripherals | `y` when split relay is enabled |
 | `CONFIG_RAW_HID_SPLIT_RELAY_CHANNEL` | Relay channel for Raw HID forwarding | `1` |
-| `CONFIG_ZMK_SPLIT_PERIPHERAL_OUTPUT_MAX_PAYLOAD` | Max relay payload bytes | `32` |
+| `CONFIG_ZMK_SPLIT_PERIPHERAL_OUTPUT_MAX_PAYLOAD` | Max relay payload bytes | `64` |
 | `CONFIG_ZMK_SPLIT_SPLT_PERIPHERAL_OUTPUT_QUEUE_SIZE` | Peripheral output queue depth | `5` |
-| `CONFIG_NICE_VIEW_HID` | Enable the custom nice!view status screen | `n` |
+| `CONFIG_NICE_VIEW_HID` | Enable the custom nice!view status screen | `n`, `y` with `nice_view_hid_adapter` |
 | `CONFIG_NICE_VIEW_HID_TWO_PROFILES` | Limit displayed profiles to two | `n` |
 | `CONFIG_NICE_VIEW_HID_SHOW_LAYOUT` | Show host layout name | `y` |
 | `CONFIG_NICE_VIEW_HID_LAYOUTS` | Comma-separated layout names | `EN` |

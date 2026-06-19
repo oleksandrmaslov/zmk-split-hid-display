@@ -15,7 +15,7 @@ config ZMK_SPLIT_SPLT_PERIPHERAL_OUTPUT_QUEUE_SIZE
 
 config ZMK_SPLIT_PERIPHERAL_OUTPUT_MAX_PAYLOAD
     int "Maximum payload size forwarded to split peripheral outputs"
-    default 32
+    default 64
     range 0 244
     help
       Defines the maximum number of payload bytes carried with a split
@@ -128,6 +128,8 @@ config NICE_VIEW_HID_MEDIA_SCROLL_MIN_BATTERY
     default 25
     depends on NICE_VIEW_HID_MEDIA_SCROLL
 
+if NICE_VIEW_HID
+
 config LV_DPI_DEF
     default 161
 
@@ -151,5 +153,7 @@ endchoice
 choice ZMK_DISPLAY_STATUS_SCREEN
     default ZMK_DISPLAY_STATUS_SCREEN_CUSTOM
 endchoice
+
+endif
 
 endmenu
