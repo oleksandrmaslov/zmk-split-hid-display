@@ -147,8 +147,8 @@ See [`examples/split-hid-display.conf`](examples/split-hid-display.conf).
 
 ### 4. Add The Relay Node On Both Halves
 
-Each split-half overlay needs a relay node. The `relay-channel` value must match
-`CONFIG_RAW_HID_SPLIT_RELAY_CHANNEL`.
+Each split-half overlay needs a relay node. The `relay-channel` value defaults
+to `1`; if you override it, it must match `CONFIG_RAW_HID_SPLIT_RELAY_CHANNEL`.
 
 ```dts
 / {
