@@ -12,8 +12,10 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
+#include <zmk/activity.h>
 #include <zmk/battery.h>
 #include <zmk/display.h>
+#include <zmk/events/activity_state_changed.h>
 #include <zmk/events/battery_state_changed.h>
 #include <zmk/events/split_peripheral_status_changed.h>
 #include <zmk/events/usb_conn_state_changed.h>
@@ -40,6 +42,11 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
  * wide blank separator, so the wrap point is easy to read and the line never blanks.
  * Scrolling is paused when battery drops below CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_MIN_BATTERY
  * (and not charging) — that's the battery-friendly knob.
+ *
+ * The marquee also rewinds to the start and stops advancing whenever the keyboard
+ * goes idle (ZMK pauses display refreshes then to save power). That keeps the
+ * persistent LCD resting on a clean start-of-text frame instead of freezing at a
+ * random offset, and typing resumes the scroll from the beginning.
  */
 
 #define MEDIA_AXIAL_START 29
@@ -319,7 +326,12 @@ static bool any_widget_needs_scroll(void) {
 
 static void media_scroll_tick(lv_timer_t *t) {
     ARG_UNUSED(t);
-    if (!any_widget_needs_scroll()) {
+    /*
+     * Hold at the start while idle: the activity listener already rewound the
+     * step and repainted, so here we just avoid advancing (and the per-tick
+     * repaint that goes with it) until the keyboard is active again.
+     */
+    if (zmk_activity_get_state() != ZMK_ACTIVITY_ACTIVE || !any_widget_needs_scroll()) {
         media_scroll_step = 0;
         return;
     }
@@ -327,6 +339,33 @@ static void media_scroll_tick(lv_timer_t *t) {
     struct zmk_widget_status *w;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, w, node) { redraw_widget(w); }
 }
+
+/*
+ * Rewind the marquee to the start on every activity-state transition. Going idle
+ * leaves the frozen frame at the beginning of the text (rather than mid-scroll),
+ * and becoming active again restarts the scroll cleanly from the start.
+ */
+struct activity_status_state {
+    enum zmk_activity_state activity;
+};
+
+static struct activity_status_state activity_status_get_state(const zmk_event_t *eh) {
+    const struct zmk_activity_state_changed *ev = as_zmk_activity_state_changed(eh);
+    return (struct activity_status_state){
+        .activity = (ev != NULL) ? ev->state : zmk_activity_get_state(),
+    };
+}
+
+static void activity_status_update_cb(struct activity_status_state state) {
+    ARG_UNUSED(state);
+    media_scroll_step = 0;
+    struct zmk_widget_status *widget;
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) { redraw_widget(widget); }
+}
+
+ZMK_DISPLAY_WIDGET_LISTENER(widget_activity_status, struct activity_status_state,
+                            activity_status_update_cb, activity_status_get_state)
+ZMK_SUBSCRIPTION(widget_activity_status, zmk_activity_state_changed);
 #endif
 
 static void copy_text_field(char *dst, const char *src) {
@@ -487,6 +526,7 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
     widget_media_title_init();
     widget_media_artist_init();
 #if IS_ENABLED(CONFIG_NICE_VIEW_HID_MEDIA_SCROLL)
+    widget_activity_status_init();
     if (media_scroll_timer == NULL) {
         media_scroll_timer = lv_timer_create(media_scroll_tick,
                                              CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_INTERVAL_MS, NULL);

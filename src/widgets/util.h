@@ -16,11 +16,7 @@
 #define NICE_VIEW_HID_PORTRAIT_WIDTH 68
 #define NICE_VIEW_HID_PORTRAIT_HEIGHT 160
 
-#define CANVAS_SIZE 68
 #define CANVAS_COLOR_FORMAT LV_COLOR_FORMAT_L8
-#define CANVAS_BUF_SIZE                                                                            \
-    LV_CANVAS_BUF_SIZE(CANVAS_SIZE, CANVAS_SIZE, LV_COLOR_FORMAT_GET_BPP(CANVAS_COLOR_FORMAT),     \
-                       LV_DRAW_BUF_STRIDE_ALIGN)
 #define SCREEN_CANVAS_BUF_SIZE                                                                     \
     LV_CANVAS_BUF_SIZE(NICE_VIEW_HID_SCREEN_WIDTH, NICE_VIEW_HID_SCREEN_HEIGHT,                    \
                        LV_COLOR_FORMAT_GET_BPP(CANVAS_COLOR_FORMAT), LV_DRAW_BUF_STRIDE_ALIGN)
@@ -66,7 +62,6 @@ struct battery_status_state {
 #endif
 };
 
-void rotate_canvas(lv_obj_t *canvas);
 void rotate_portrait_canvas(uint8_t *source_buf, uint8_t *dest_buf);
 void draw_battery(lv_obj_t *canvas, const struct status_state *state);
 void draw_elemental_bluetooth_logo(lv_obj_t *canvas, lv_coord_t x, lv_coord_t y);
@@ -82,17 +77,9 @@ void draw_volume_icon(lv_obj_t *canvas, lv_coord_t x, lv_coord_t y, uint8_t leve
 void init_label_dsc(lv_draw_label_dsc_t *label_dsc, lv_color_t color, const lv_font_t *font,
                     lv_text_align_t align);
 void init_rect_dsc(lv_draw_rect_dsc_t *rect_dsc, lv_color_t bg_color);
-void init_line_dsc(lv_draw_line_dsc_t *line_dsc, lv_color_t color, uint8_t width);
-void init_arc_dsc(lv_draw_arc_dsc_t *arc_dsc, lv_color_t color, uint8_t width);
-void canvas_draw_line(lv_obj_t *canvas, const lv_point_t points[], uint32_t point_cnt,
-                      lv_draw_line_dsc_t *draw_dsc);
 void canvas_draw_rect(lv_obj_t *canvas, lv_coord_t x, lv_coord_t y, lv_coord_t w, lv_coord_t h,
                       lv_draw_rect_dsc_t *draw_dsc);
-void canvas_draw_arc(lv_obj_t *canvas, lv_coord_t x, lv_coord_t y, lv_coord_t r,
-                     int32_t start_angle, int32_t end_angle, lv_draw_arc_dsc_t *draw_dsc);
 void canvas_draw_text(lv_obj_t *canvas, lv_coord_t x, lv_coord_t y, lv_coord_t max_w,
                       lv_draw_label_dsc_t *draw_dsc, const char *txt);
-void canvas_draw_rotated_text(lv_obj_t *canvas, lv_coord_t x, lv_coord_t y, lv_coord_t max_w,
-                              int32_t rotation, lv_draw_label_dsc_t *draw_dsc, const char *txt);
 void canvas_draw_img(lv_obj_t *canvas, lv_coord_t x, lv_coord_t y, const lv_image_dsc_t *src,
                      lv_draw_image_dsc_t *draw_dsc);
