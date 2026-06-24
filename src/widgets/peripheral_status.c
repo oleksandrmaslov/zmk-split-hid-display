@@ -35,7 +35,9 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
  *   - "Playing"/"Offline" status @ (54, 39..) Montserrat-14 rotated 900
  *
  * Marquee: when title or artist exceeds the available 127 px axial run, advance a
- * character-window every CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_INTERVAL_MS ms.
+ * character-window every CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_INTERVAL_MS ms. The text
+ * loops continuously — its start trails its end by a CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_GAP_CHARS
+ * wide blank separator, so the wrap point is easy to read and the line never blanks.
  * Scrolling is paused when battery drops below CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_MIN_BATTERY
  * (and not charging) — that's the battery-friendly knob.
  */
@@ -43,6 +45,9 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #define MEDIA_AXIAL_START 29
 #define MEDIA_AXIAL_END 156
 #define MEDIA_AXIAL_LENGTH (MEDIA_AXIAL_END - MEDIA_AXIAL_START)
+
+/* Upper bound on the loop separator, used to size the marquee compose buffer. */
+#define MEDIA_SCROLL_GAP_MAX 32
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
 
@@ -146,10 +151,10 @@ static const char *fallback_artist(const struct status_state *state) {
 
 #if IS_ENABLED(CONFIG_NICE_VIEW_HID_MEDIA_SCROLL)
 /*
- * Char-level marquee: every tick, advance a UTF-8-aware character offset.
- * We render the substring starting at byte `byte_offset`, so very long titles
- * gradually slide across the visible axial run. When the substring fits, we
- * pause at offset 0 (no animation cost).
+ * Char-level marquee: every tick, advance a UTF-8-aware character offset into
+ * the conceptually endless string "<text><gap><text><gap>…". Very long titles
+ * slide across the visible axial run and wrap around seamlessly. When the text
+ * already fits, we render it statically at offset 0 (no animation cost).
  */
 static size_t utf8_char_advance(const char *s) {
     if (s == NULL || *s == '\0') return 0;
@@ -220,19 +225,37 @@ static void draw_marquee_text(struct zmk_widget_status *widget, lv_coord_t x, lv
         return;
     }
 
-    const size_t start_pause = CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_START_PAUSE_STEPS;
-    const size_t end_pause = CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_END_PAUSE_STEPS;
-    const size_t cycle = start_pause + total_chars + end_pause;
-    size_t phase = step % cycle;
-    size_t skip = 0;
-    if (phase >= start_pause) {
-        skip = phase - start_pause;
+    /*
+     * Materialise one period of the looping ticker — "<text><gap><text>" — and
+     * slide a character window across it. Two copies plus the gap guarantee the
+     * window is always backed by enough glyphs to fill the axial run, so the
+     * line never goes blank: as the tail scrolls off, the wrapped-around head is
+     * already trailing it behind the blank gap separator.
+     */
+    size_t tlen = strlen(txt);
+    if (tlen > NICE_VIEW_HID_TEXT_MAX_LEN) {
+        tlen = NICE_VIEW_HID_TEXT_MAX_LEN;
     }
-    if (skip > total_chars) {
-        skip = total_chars;
-    }
+    const size_t gap_chars =
+        MIN((size_t)CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_GAP_CHARS, (size_t)MEDIA_SCROLL_GAP_MAX);
 
-    const char *windowed = utf8_advance_chars(txt, skip);
+    static char loop_buf[2 * NICE_VIEW_HID_TEXT_MAX_LEN + MEDIA_SCROLL_GAP_MAX + 1];
+    size_t pos = 0;
+    memcpy(loop_buf + pos, txt, tlen);
+    pos += tlen;
+    memset(loop_buf + pos, ' ', gap_chars);
+    pos += gap_chars;
+    memcpy(loop_buf + pos, txt, tlen);
+    pos += tlen;
+    loop_buf[pos] = '\0';
+
+    const size_t start_pause = CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_START_PAUSE_STEPS;
+    const size_t loop_chars = total_chars + gap_chars;
+    const size_t cycle = start_pause + loop_chars;
+    size_t phase = step % cycle;
+    size_t skip = (phase > start_pause) ? (phase - start_pause) : 0;
+
+    const char *windowed = utf8_advance_chars(loop_buf, skip);
     draw_sideways_text(widget, x, y, axial_max, color, &dsc, windowed);
 #else
     ARG_UNUSED(step);
