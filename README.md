@@ -213,11 +213,12 @@ The peripheral media view uses a temporary text canvas and copies a fixed font
 line height into the rotated portrait canvas. That keeps the track line visually
 stable when glyphs have different ascenders or descenders.
 
-Long media strings use a character-window marquee:
+Long media strings use a character-window marquee that loops continuously:
 
 - `CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_START_PAUSE_STEPS` pauses at the beginning.
-- `CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_END_PAUSE_STEPS` leaves a blank gap before
-  the loop restarts.
+- `CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_GAP_CHARS` sets the blank separator between
+  the end of the text and its wrapped-around start, so the loop point stays
+  readable.
 - `CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_INTERVAL_MS` controls tick speed.
 - `CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_MIN_BATTERY` disables scrolling below a
   battery threshold unless charging.
@@ -243,7 +244,7 @@ Long media strings use a character-window marquee:
 | `CONFIG_NICE_VIEW_HID_MEDIA_SCROLL` | Scroll overflowing media text | `y` |
 | `CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_INTERVAL_MS` | Media scroll interval in milliseconds | `350` |
 | `CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_START_PAUSE_STEPS` | Scroll ticks to pause at text start | `3` |
-| `CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_END_PAUSE_STEPS` | Blank scroll ticks between loop end and restart | `10` |
+| `CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_GAP_CHARS` | Blank separator width (in spaces) between loop end and restart | `6` |
 | `CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_MIN_BATTERY` | Minimum battery percentage for scrolling unless charging | `25` |
 
 ## Troubleshooting

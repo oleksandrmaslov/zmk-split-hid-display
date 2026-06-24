@@ -12,8 +12,10 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
+#include <zmk/activity.h>
 #include <zmk/battery.h>
 #include <zmk/display.h>
+#include <zmk/events/activity_state_changed.h>
 #include <zmk/events/battery_state_changed.h>
 #include <zmk/events/split_peripheral_status_changed.h>
 #include <zmk/events/usb_conn_state_changed.h>
@@ -35,14 +37,24 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
  *   - "Playing"/"Offline" status @ (54, 39..) Montserrat-14 rotated 900
  *
  * Marquee: when title or artist exceeds the available 127 px axial run, advance a
- * character-window every CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_INTERVAL_MS ms.
+ * character-window every CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_INTERVAL_MS ms. The text
+ * loops continuously — its start trails its end by a CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_GAP_CHARS
+ * wide blank separator, so the wrap point is easy to read and the line never blanks.
  * Scrolling is paused when battery drops below CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_MIN_BATTERY
  * (and not charging) — that's the battery-friendly knob.
+ *
+ * The marquee also rewinds to the start and stops advancing whenever the keyboard
+ * goes idle (ZMK pauses display refreshes then to save power). That keeps the
+ * persistent LCD resting on a clean start-of-text frame instead of freezing at a
+ * random offset, and typing resumes the scroll from the beginning.
  */
 
 #define MEDIA_AXIAL_START 29
 #define MEDIA_AXIAL_END 156
 #define MEDIA_AXIAL_LENGTH (MEDIA_AXIAL_END - MEDIA_AXIAL_START)
+
+/* Upper bound on the loop separator, used to size the marquee compose buffer. */
+#define MEDIA_SCROLL_GAP_MAX 32
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
 
@@ -146,10 +158,10 @@ static const char *fallback_artist(const struct status_state *state) {
 
 #if IS_ENABLED(CONFIG_NICE_VIEW_HID_MEDIA_SCROLL)
 /*
- * Char-level marquee: every tick, advance a UTF-8-aware character offset.
- * We render the substring starting at byte `byte_offset`, so very long titles
- * gradually slide across the visible axial run. When the substring fits, we
- * pause at offset 0 (no animation cost).
+ * Char-level marquee: every tick, advance a UTF-8-aware character offset into
+ * the conceptually endless string "<text><gap><text><gap>…". Very long titles
+ * slide across the visible axial run and wrap around seamlessly. When the text
+ * already fits, we render it statically at offset 0 (no animation cost).
  */
 static size_t utf8_char_advance(const char *s) {
     if (s == NULL || *s == '\0') return 0;
@@ -220,19 +232,37 @@ static void draw_marquee_text(struct zmk_widget_status *widget, lv_coord_t x, lv
         return;
     }
 
-    const size_t start_pause = CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_START_PAUSE_STEPS;
-    const size_t end_pause = CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_END_PAUSE_STEPS;
-    const size_t cycle = start_pause + total_chars + end_pause;
-    size_t phase = step % cycle;
-    size_t skip = 0;
-    if (phase >= start_pause) {
-        skip = phase - start_pause;
+    /*
+     * Materialise one period of the looping ticker — "<text><gap><text>" — and
+     * slide a character window across it. Two copies plus the gap guarantee the
+     * window is always backed by enough glyphs to fill the axial run, so the
+     * line never goes blank: as the tail scrolls off, the wrapped-around head is
+     * already trailing it behind the blank gap separator.
+     */
+    size_t tlen = strlen(txt);
+    if (tlen > NICE_VIEW_HID_TEXT_MAX_LEN) {
+        tlen = NICE_VIEW_HID_TEXT_MAX_LEN;
     }
-    if (skip > total_chars) {
-        skip = total_chars;
-    }
+    const size_t gap_chars =
+        MIN((size_t)CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_GAP_CHARS, (size_t)MEDIA_SCROLL_GAP_MAX);
 
-    const char *windowed = utf8_advance_chars(txt, skip);
+    static char loop_buf[2 * NICE_VIEW_HID_TEXT_MAX_LEN + MEDIA_SCROLL_GAP_MAX + 1];
+    size_t pos = 0;
+    memcpy(loop_buf + pos, txt, tlen);
+    pos += tlen;
+    memset(loop_buf + pos, ' ', gap_chars);
+    pos += gap_chars;
+    memcpy(loop_buf + pos, txt, tlen);
+    pos += tlen;
+    loop_buf[pos] = '\0';
+
+    const size_t start_pause = CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_START_PAUSE_STEPS;
+    const size_t loop_chars = total_chars + gap_chars;
+    const size_t cycle = start_pause + loop_chars;
+    size_t phase = step % cycle;
+    size_t skip = (phase > start_pause) ? (phase - start_pause) : 0;
+
+    const char *windowed = utf8_advance_chars(loop_buf, skip);
     draw_sideways_text(widget, x, y, axial_max, color, &dsc, windowed);
 #else
     ARG_UNUSED(step);
@@ -296,7 +326,12 @@ static bool any_widget_needs_scroll(void) {
 
 static void media_scroll_tick(lv_timer_t *t) {
     ARG_UNUSED(t);
-    if (!any_widget_needs_scroll()) {
+    /*
+     * Hold at the start while idle: the activity listener already rewound the
+     * step and repainted, so here we just avoid advancing (and the per-tick
+     * repaint that goes with it) until the keyboard is active again.
+     */
+    if (zmk_activity_get_state() != ZMK_ACTIVITY_ACTIVE || !any_widget_needs_scroll()) {
         media_scroll_step = 0;
         return;
     }
@@ -304,6 +339,33 @@ static void media_scroll_tick(lv_timer_t *t) {
     struct zmk_widget_status *w;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, w, node) { redraw_widget(w); }
 }
+
+/*
+ * Rewind the marquee to the start on every activity-state transition. Going idle
+ * leaves the frozen frame at the beginning of the text (rather than mid-scroll),
+ * and becoming active again restarts the scroll cleanly from the start.
+ */
+struct activity_status_state {
+    enum zmk_activity_state activity;
+};
+
+static struct activity_status_state activity_status_get_state(const zmk_event_t *eh) {
+    const struct zmk_activity_state_changed *ev = as_zmk_activity_state_changed(eh);
+    return (struct activity_status_state){
+        .activity = (ev != NULL) ? ev->state : zmk_activity_get_state(),
+    };
+}
+
+static void activity_status_update_cb(struct activity_status_state state) {
+    ARG_UNUSED(state);
+    media_scroll_step = 0;
+    struct zmk_widget_status *widget;
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) { redraw_widget(widget); }
+}
+
+ZMK_DISPLAY_WIDGET_LISTENER(widget_activity_status, struct activity_status_state,
+                            activity_status_update_cb, activity_status_get_state)
+ZMK_SUBSCRIPTION(widget_activity_status, zmk_activity_state_changed);
 #endif
 
 static void copy_text_field(char *dst, const char *src) {
@@ -464,6 +526,7 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
     widget_media_title_init();
     widget_media_artist_init();
 #if IS_ENABLED(CONFIG_NICE_VIEW_HID_MEDIA_SCROLL)
+    widget_activity_status_init();
     if (media_scroll_timer == NULL) {
         media_scroll_timer = lv_timer_create(media_scroll_tick,
                                              CONFIG_NICE_VIEW_HID_MEDIA_SCROLL_INTERVAL_MS, NULL);

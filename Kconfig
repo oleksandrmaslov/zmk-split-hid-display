@@ -113,14 +113,15 @@ config NICE_VIEW_HID_MEDIA_SCROLL_START_PAUSE_STEPS
       Number of scroll timer ticks to keep overflowing media text at the
       beginning of the string before it starts moving.
 
-config NICE_VIEW_HID_MEDIA_SCROLL_END_PAUSE_STEPS
-    int "Media scroll end pause steps"
-    default 10
-    range 0 60
+config NICE_VIEW_HID_MEDIA_SCROLL_GAP_CHARS
+    int "Media scroll loop gap width"
+    default 6
+    range 1 32
     depends on NICE_VIEW_HID_MEDIA_SCROLL
     help
-      Number of scroll timer ticks to show a blank gap after overflowing
-      media text has scrolled off before the next loop starts.
+      Width, in space characters, of the blank separator inserted between the
+      end of overflowing media text and its wrapped-around start. The marquee
+      loops continuously; this gap makes the loop point easy to distinguish.
 
 config NICE_VIEW_HID_MEDIA_SCROLL_MIN_BATTERY
     int "Minimum battery percentage for media scrolling"
