@@ -41,6 +41,7 @@ enum or_peripheral_slot_state {
 struct or_peripheral_slot {
     enum or_peripheral_slot_state state;
     struct bt_conn *conn;
+    bool discovering;
     struct bt_gatt_discover_params discover_params;
     struct bt_gatt_subscribe_params subscribe_params;
     uint16_t update_output_handler;
@@ -50,6 +51,16 @@ static struct or_peripheral_slot peripherals[ZMK_SPLIT_BLE_PERIPHERAL_COUNT];
 
 static const struct bt_uuid_128 split_or_service_uuid = BT_UUID_INIT_128(
     ZMK_SPLIT_BT_OR_SERVICE_UUID);
+
+/* ZMK starts its mandatory split GATT discovery as soon as a peripheral
+ * connects. Keep this optional display-relay discovery out of that startup
+ * window, then retry any transient ATT allocation/connection failure instead
+ * of leaving the relay handle unset for the lifetime of the connection. */
+#define SPLIT_OR_DISCOVER_RETRY_MS 500
+
+static void split_central_discover_work_callback(struct k_work *work);
+static K_WORK_DELAYABLE_DEFINE(split_central_discover_work,
+                               split_central_discover_work_callback);
 
 static int or_peripheral_slot_index_for_conn(struct bt_conn *conn) {
     for (int i = 0; i < ZMK_SPLIT_BLE_PERIPHERAL_COUNT; i++) {
@@ -85,6 +96,7 @@ static int release_or_peripheral_slot(int index) {
         slot->conn = NULL;
     }
     slot->state = PERIPHERAL_SLOT_STATE_OPEN;
+    slot->discovering = false;
 
     // Clean up previously discovered handles;
     slot->subscribe_params.value_handle = 0;
@@ -98,7 +110,9 @@ static int reserve_or_peripheral_slot_for_conn(struct bt_conn *conn) {
     for (int i = 0; i < ZMK_SPLIT_BLE_PERIPHERAL_COUNT; i++) {
         if (peripherals[i].state == PERIPHERAL_SLOT_STATE_OPEN) {
             // Be sure the slot is fully reinitialized.
-            release_or_peripheral_slot(i);
+            peripherals[i].discovering = false;
+            peripherals[i].subscribe_params.value_handle = 0;
+            peripherals[i].update_output_handler = 0;
             peripherals[i].conn = conn;
             peripherals[i].state = PERIPHERAL_SLOT_STATE_CONNECTED;
             return i;
@@ -109,7 +123,9 @@ static int reserve_or_peripheral_slot_for_conn(struct bt_conn *conn) {
     if (i >= 0) {
         if (peripherals[i].state == PERIPHERAL_SLOT_STATE_OPEN) {
             // Be sure the slot is fully reinitialized.
-            release_or_peripheral_slot(i);
+            peripherals[i].discovering = false;
+            peripherals[i].subscribe_params.value_handle = 0;
+            peripherals[i].update_output_handler = 0;
             peripherals[i].conn = conn;
             peripherals[i].state = PERIPHERAL_SLOT_STATE_CONNECTED;
             return i;
@@ -132,19 +148,23 @@ static int release_or_peripheral_slot_for_conn(struct bt_conn *conn) {
 static uint8_t split_central_chrc_discovery_func(struct bt_conn *conn,
                                                  const struct bt_gatt_attr *attr,
                                                  struct bt_gatt_discover_params *params) {
+    ARG_UNUSED(params);
+
+    struct or_peripheral_slot *slot = or_peripheral_slot_for_conn(conn);
+    if (slot == NULL) {
+        LOG_ERR("No peripheral state found for connection");
+        return BT_GATT_ITER_STOP;
+    }
+
     if (!attr) {
         LOG_DBG("Discover complete");
+        slot->discovering = false;
         return BT_GATT_ITER_STOP;
     }
 
     if (!attr->user_data) {
         LOG_ERR("Required user data not passed to discovery");
-        return BT_GATT_ITER_STOP;
-    }
-
-    struct or_peripheral_slot *slot = or_peripheral_slot_for_conn(conn);
-    if (slot == NULL) {
-        LOG_ERR("No peripheral state found for connection");
+        slot->discovering = false;
         return BT_GATT_ITER_STOP;
     }
 
@@ -155,6 +175,7 @@ static uint8_t split_central_chrc_discovery_func(struct bt_conn *conn,
     if (bt_uuid_cmp(chrc_uuid, BT_UUID_DECLARE_128(ZMK_SPLIT_BT_OR_CHAR_OUTPUT_STATE_UUID)) == 0) {
         LOG_DBG("Found update output handle");
         slot->update_output_handler = bt_gatt_attr_value_handle(attr);
+        slot->discovering = false;
     }
 #endif /* IS_ENABLED(CONFIG_ZMK_SPLT_PERIPHERAL_OUTPUT_RELAY) */
 
@@ -169,70 +190,92 @@ static uint8_t split_central_chrc_discovery_func(struct bt_conn *conn,
 static uint8_t split_central_service_discovery_func(struct bt_conn *conn,
                                                     const struct bt_gatt_attr *attr,
                                                     struct bt_gatt_discover_params *params) {
+    struct or_peripheral_slot *slot = or_peripheral_slot_for_conn(conn);
+    if (slot == NULL) {
+        LOG_ERR("No peripheral state found for connection");
+        return BT_GATT_ITER_STOP;
+    }
+
     if (!attr) {
         LOG_DBG("Discover complete");
+        slot->discovering = false;
         (void)memset(params, 0, sizeof(*params));
         return BT_GATT_ITER_STOP;
     }
 
     LOG_DBG("[ATTRIBUTE] handle %u", attr->handle);
 
-    struct or_peripheral_slot *slot = or_peripheral_slot_for_conn(conn);
-    if (slot == NULL) {
-        LOG_ERR("No peripheral state found for connection");
+    if (!attr->user_data) {
+        LOG_ERR("Required user data not passed to service discovery");
+        slot->discovering = false;
         return BT_GATT_ITER_STOP;
     }
 
-    if (bt_uuid_cmp(slot->discover_params.uuid,
-        BT_UUID_DECLARE_128(ZMK_SPLIT_BT_OR_SERVICE_UUID)) != 0
-    ) {
-        LOG_DBG("Found other service");
-        return BT_GATT_ITER_CONTINUE;
-    }
-
     LOG_DBG("Found split service");
+    const struct bt_gatt_service_val *service = attr->user_data;
     slot->discover_params.uuid = NULL;
     slot->discover_params.func = split_central_chrc_discovery_func;
+    slot->discover_params.start_handle = attr->handle + 1;
+    slot->discover_params.end_handle = service->end_handle;
     slot->discover_params.type = BT_GATT_DISCOVER_CHARACTERISTIC;
 
     int err = bt_gatt_discover(conn, &slot->discover_params);
     if (err) {
         LOG_ERR("Failed to start discovering split service characteristics (err %d)", err);
+        slot->discovering = false;
     }
     return BT_GATT_ITER_STOP;
 }
 
-static void split_central_process_connection(struct bt_conn *conn) {
-    int err;
+static void split_central_begin_discovery(struct or_peripheral_slot *slot) {
+    slot->discover_params.uuid = &split_or_service_uuid.uuid;
+    slot->discover_params.func = split_central_service_discovery_func;
+    slot->discover_params.start_handle = 0x0001;
+    slot->discover_params.end_handle = 0xffff;
+    slot->discover_params.type = BT_GATT_DISCOVER_PRIMARY;
 
-    LOG_DBG("Current security for connection: %d", bt_conn_get_security(conn));
-
-    struct or_peripheral_slot *slot = or_peripheral_slot_for_conn(conn);
-    if (slot == NULL) {
-        LOG_ERR("No peripheral state found for connection");
+    int err = bt_gatt_discover(slot->conn, &slot->discover_params);
+    if (err) {
+        LOG_DBG("Split output relay discovery failed (err %d), will retry", err);
         return;
     }
 
-    if (!slot->subscribe_params.value_handle) {
-        slot->discover_params.uuid = &split_or_service_uuid.uuid;
-        slot->discover_params.func = split_central_service_discovery_func;
-        slot->discover_params.start_handle = 0x0001;
-        slot->discover_params.end_handle = 0xffff;
-        slot->discover_params.type = BT_GATT_DISCOVER_PRIMARY;
+    slot->discovering = true;
+}
 
-        err = bt_gatt_discover(slot->conn, &slot->discover_params);
-        if (err) {
-            LOG_ERR("Discover failed(err %d)", err);
-            return;
+static bool split_central_discovery_pending(void) {
+    for (int i = 0; i < ZMK_SPLIT_BLE_PERIPHERAL_COUNT; i++) {
+        if (peripherals[i].state == PERIPHERAL_SLOT_STATE_CONNECTED &&
+            peripherals[i].conn != NULL && peripherals[i].update_output_handler == 0) {
+            return true;
         }
     }
 
-    struct bt_conn_info info;
+    return false;
+}
 
-    bt_conn_get_info(conn, &info);
+static void split_central_discover_work_callback(struct k_work *work) {
+    ARG_UNUSED(work);
 
-    LOG_DBG("New connection params: Interval: %d, Latency: %d, PHY: %d", info.le.interval,
-            info.le.latency, info.le.phy->rx_phy);
+    for (int i = 0; i < ZMK_SPLIT_BLE_PERIPHERAL_COUNT; i++) {
+        struct or_peripheral_slot *slot = &peripherals[i];
+
+        if (slot->state != PERIPHERAL_SLOT_STATE_CONNECTED || slot->conn == NULL ||
+            slot->update_output_handler != 0 || slot->discovering) {
+            continue;
+        }
+
+        if (bt_conn_get_security(slot->conn) < BT_SECURITY_L2) {
+            continue;
+        }
+
+        split_central_begin_discovery(slot);
+    }
+
+    if (split_central_discovery_pending()) {
+        k_work_reschedule(&split_central_discover_work,
+                          K_MSEC(SPLIT_OR_DISCOVER_RETRY_MS));
+    }
 }
 
 static void split_central_connected(struct bt_conn *conn, uint8_t conn_err) {
@@ -262,7 +305,20 @@ static void split_central_connected(struct bt_conn *conn, uint8_t conn_err) {
         return;
     }
 
-    split_central_process_connection(conn);
+    /* Let ZMK complete its mandatory split-service discovery first. */
+    k_work_reschedule(&split_central_discover_work,
+                      K_MSEC(SPLIT_OR_DISCOVER_RETRY_MS));
+}
+
+static void split_central_security_changed(struct bt_conn *conn, bt_security_t level,
+                                           enum bt_security_err err) {
+    ARG_UNUSED(level);
+    ARG_UNUSED(err);
+
+    if (or_peripheral_slot_for_conn(conn) != NULL) {
+        /* The worker performs the actual security-level check. */
+        k_work_reschedule(&split_central_discover_work, K_MSEC(50));
+    }
 }
 
 static void split_central_disconnected(struct bt_conn *conn, uint8_t reason) {
@@ -278,11 +334,19 @@ static void split_central_disconnected(struct bt_conn *conn, uint8_t reason) {
     if (err < 0) {
         return;
     }
+
+    if (split_central_discovery_pending()) {
+        k_work_reschedule(&split_central_discover_work,
+                          K_MSEC(SPLIT_OR_DISCOVER_RETRY_MS));
+    } else {
+        (void)k_work_cancel_delayable(&split_central_discover_work);
+    }
 }
 
 static struct bt_conn_cb conn_callbacks = {
     .connected = split_central_connected,
     .disconnected = split_central_disconnected,
+    .security_changed = split_central_security_changed,
 };
 
 K_THREAD_STACK_DEFINE(split_central_split_or_run_q_stack,
