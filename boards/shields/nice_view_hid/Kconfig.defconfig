@@ -7,6 +7,7 @@ config NICE_VIEW_HID
     default y
 
 config LS0XX_VCOM_THREAD_PRIO
+    int
     default 11
 
 config NICE_VIEW_HID_MEDIA_SCROLL
