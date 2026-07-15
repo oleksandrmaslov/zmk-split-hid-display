@@ -211,6 +211,21 @@ static void draw_status(struct zmk_widget_status *widget) {
     lv_obj_invalidate(widget->screen_canvas);
 }
 
+/*
+ * One-shot repaint shortly after boot. On a battery boot the frame drawn
+ * during widget init can be flushed while the panel/regulator bring-up is
+ * still settling and silently lost; LVGL then considers the area clean, and
+ * with no host connected no event may arrive to invalidate it again for a
+ * long time, leaving the screen empty until e.g. the BLE connection redraws
+ * it. Repainting once past the bring-up window guarantees a visible frame.
+ */
+static void boot_redraw_work_cb(struct k_work *work) {
+    struct zmk_widget_status *widget;
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) { draw_status(widget); }
+}
+
+static K_WORK_DELAYABLE_DEFINE(boot_redraw_work, boot_redraw_work_cb);
+
 /* ---------- ZMK event listeners ---------- */
 
 static void set_battery_status(struct zmk_widget_status *widget,
@@ -481,6 +496,8 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
     widget_media_title_init();
     widget_media_artist_init();
 #endif
+
+    k_work_schedule_for_queue(zmk_display_work_q(), &boot_redraw_work, K_SECONDS(3));
 
     return 0;
 }
