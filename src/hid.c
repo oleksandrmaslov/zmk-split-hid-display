@@ -29,6 +29,13 @@ typedef enum {
 
 static bool is_connected = false;
 
+static struct time_notification last_time;
+static struct media_artist_notification last_media_artist;
+static struct media_title_notification last_media_title;
+#ifdef CONFIG_NICE_VIEW_HID_SHOW_LAYOUT
+static struct layout_notification last_layout;
+#endif
+
 static void on_disconnect_timer(struct k_timer *dummy) {
     LOG_INF("raise_connection_notification: false");
     is_connected = false;
@@ -75,10 +82,12 @@ static void handle_media_field(bool is_artist, uint8_t *data, uint8_t length) {
     if (is_artist) {
         struct media_artist_notification notification = {0};
         memcpy(notification.value, data + 2, copy_len);
+        last_media_artist = notification;
         raise_media_artist_notification(notification);
     } else {
         struct media_title_notification notification = {0};
         memcpy(notification.value, data + 2, copy_len);
+        last_media_title = notification;
         raise_media_title_notification(notification);
     }
 }
@@ -105,7 +114,8 @@ static void process_raw_hid_data(uint8_t *data, uint8_t length) {
             LOG_WRN("Time payload too short (%u)", length);
             break;
         }
-        raise_time_notification((struct time_notification){.hour = data[1], .minute = data[2]});
+        last_time = (struct time_notification){.hour = data[1], .minute = data[2]};
+        raise_time_notification(last_time);
         break;
 
     case _VOLUME:
@@ -129,7 +139,8 @@ static void process_raw_hid_data(uint8_t *data, uint8_t length) {
             LOG_WRN("Layout payload too short (%u)", length);
             break;
         }
-        raise_layout_notification((struct layout_notification){.value = data[1]});
+        last_layout = (struct layout_notification){.value = data[1]};
+        raise_layout_notification(last_layout);
         break;
 #endif
     case _MEDIA_ARTIST:
@@ -149,6 +160,25 @@ static int raw_hid_received_event_listener(const zmk_event_t *eh) {
 
     return ZMK_EV_EVENT_BUBBLE;
 }
+
+/* Live-state getters used by the widgets to seed their initial state. */
+bool nice_view_hid_is_connected(void) { return is_connected; }
+
+struct time_notification nice_view_hid_last_time(void) { return last_time; }
+
+struct volume_notification nice_view_hid_last_volume(void) {
+    return (struct volume_notification){.value = last_hid_volume};
+}
+
+struct media_artist_notification nice_view_hid_last_media_artist(void) {
+    return last_media_artist;
+}
+
+struct media_title_notification nice_view_hid_last_media_title(void) { return last_media_title; }
+
+#ifdef CONFIG_NICE_VIEW_HID_SHOW_LAYOUT
+struct layout_notification nice_view_hid_last_layout(void) { return last_layout; }
+#endif
 
 ZMK_LISTENER(process_raw_hid_event, raw_hid_received_event_listener);
 ZMK_SUBSCRIPTION(process_raw_hid_event, raw_hid_received_event);

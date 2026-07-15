@@ -325,7 +325,11 @@ static void copy_text_field(char *dst, const char *src) {
 
 static struct is_connected_notification get_is_hid_connected(const zmk_event_t *eh) {
     struct is_connected_notification *n = as_is_connected_notification(eh);
-    return n ? *n : (struct is_connected_notification){.value = false};
+    /* No event = initial state seed at display init. The connected
+     * notification is edge-triggered and may already have fired (and been
+     * dropped) before the display was ready, so query the live state instead
+     * of assuming false. */
+    return n ? *n : (struct is_connected_notification){.value = nice_view_hid_is_connected()};
 }
 
 static void is_hid_connected_update_cb(struct is_connected_notification is_connected) {
@@ -346,7 +350,7 @@ ZMK_SUBSCRIPTION(widget_is_connected, is_connected_notification);
 
 static struct time_notification get_time(const zmk_event_t *eh) {
     struct time_notification *n = as_time_notification(eh);
-    return n ? *n : (struct time_notification){.hour = 0, .minute = 0};
+    return n ? *n : nice_view_hid_last_time();
 }
 
 static void time_update_cb(struct time_notification time) {
@@ -363,7 +367,7 @@ ZMK_SUBSCRIPTION(widget_time, time_notification);
 
 static struct volume_notification get_volume(const zmk_event_t *eh) {
     struct volume_notification *n = as_volume_notification(eh);
-    return n ? *n : (struct volume_notification){.value = 0};
+    return n ? *n : nice_view_hid_last_volume();
 }
 
 static void volume_update_cb(struct volume_notification volume) {
@@ -380,7 +384,7 @@ ZMK_SUBSCRIPTION(widget_volume, volume_notification);
 #ifdef CONFIG_NICE_VIEW_HID_SHOW_LAYOUT
 static struct layout_notification get_layout(const zmk_event_t *eh) {
     struct layout_notification *n = as_layout_notification(eh);
-    return n ? *n : (struct layout_notification){.value = 0};
+    return n ? *n : nice_view_hid_last_layout();
 }
 
 static void layout_update_cb(struct layout_notification layout) {
@@ -397,7 +401,7 @@ ZMK_SUBSCRIPTION(widget_layout, layout_notification);
 
 static struct media_title_notification get_media_title(const zmk_event_t *eh) {
     struct media_title_notification *n = as_media_title_notification(eh);
-    return n ? *n : (struct media_title_notification){0};
+    return n ? *n : nice_view_hid_last_media_title();
 }
 
 static void media_title_update_cb(struct media_title_notification title) {
@@ -414,7 +418,7 @@ ZMK_SUBSCRIPTION(widget_media_title, media_title_notification);
 
 static struct media_artist_notification get_media_artist(const zmk_event_t *eh) {
     struct media_artist_notification *n = as_media_artist_notification(eh);
-    return n ? *n : (struct media_artist_notification){0};
+    return n ? *n : nice_view_hid_last_media_artist();
 }
 
 static void media_artist_update_cb(struct media_artist_notification artist) {

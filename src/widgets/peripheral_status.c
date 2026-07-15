@@ -432,7 +432,11 @@ ZMK_SUBSCRIPTION(widget_peripheral_status, zmk_split_peripheral_status_changed);
 
 static struct is_connected_notification get_is_hid_connected(const zmk_event_t *eh) {
     struct is_connected_notification *n = as_is_connected_notification(eh);
-    return n ? *n : (struct is_connected_notification){.value = false};
+    /* No event = initial state seed at display init. The connected
+     * notification is edge-triggered and may already have fired (and been
+     * dropped) before the display was ready, so query the live state instead
+     * of assuming false. */
+    return n ? *n : (struct is_connected_notification){.value = nice_view_hid_is_connected()};
 }
 
 static void is_hid_connected_update_cb(struct is_connected_notification is_connected) {
@@ -453,7 +457,7 @@ ZMK_SUBSCRIPTION(widget_is_connected, is_connected_notification);
 
 static struct media_title_notification get_media_title(const zmk_event_t *eh) {
     struct media_title_notification *n = as_media_title_notification(eh);
-    return n ? *n : (struct media_title_notification){0};
+    return n ? *n : nice_view_hid_last_media_title();
 }
 
 static void media_title_update_cb(struct media_title_notification title) {
@@ -473,7 +477,7 @@ ZMK_SUBSCRIPTION(widget_media_title, media_title_notification);
 
 static struct media_artist_notification get_media_artist(const zmk_event_t *eh) {
     struct media_artist_notification *n = as_media_artist_notification(eh);
-    return n ? *n : (struct media_artist_notification){0};
+    return n ? *n : nice_view_hid_last_media_artist();
 }
 
 static void media_artist_update_cb(struct media_artist_notification artist) {

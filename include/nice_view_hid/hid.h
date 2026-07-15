@@ -44,4 +44,19 @@ struct layout_notification {
 
 ZMK_EVENT_DECLARE(layout_notification);
 #endif
+
+/*
+ * Last-known host state, kept by hid.c. The notifications above are
+ * edge-triggered, and ZMK's display widget listeners drop events that fire
+ * before the display finishes initializing; widgets seed their initial state
+ * from these getters so an early notification cannot leave them stale.
+ */
+bool nice_view_hid_is_connected(void);
+struct time_notification nice_view_hid_last_time(void);
+struct volume_notification nice_view_hid_last_volume(void);
+struct media_artist_notification nice_view_hid_last_media_artist(void);
+struct media_title_notification nice_view_hid_last_media_title(void);
+#ifdef CONFIG_NICE_VIEW_HID_SHOW_LAYOUT
+struct layout_notification nice_view_hid_last_layout(void);
+#endif
 #endif
