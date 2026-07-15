@@ -306,6 +306,21 @@ static void redraw_widget(struct zmk_widget_status *widget) {
     lv_obj_invalidate(widget->screen_canvas);
 }
 
+/*
+ * One-shot repaint shortly after boot, mirroring the central widget. When
+ * the central is already on, the split link connects almost immediately and
+ * the early event-driven draws can be flushed while the panel/regulator
+ * bring-up is still settling and silently lost; at idle nothing invalidates
+ * the screen again, leaving it empty. Repainting once past the bring-up
+ * window guarantees a visible frame.
+ */
+static void boot_redraw_work_cb(struct k_work *work) {
+    struct zmk_widget_status *widget;
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) { redraw_widget(widget); }
+}
+
+static K_WORK_DELAYABLE_DEFINE(boot_redraw_work, boot_redraw_work_cb);
+
 #if IS_ENABLED(CONFIG_RAW_HID) && IS_ENABLED(CONFIG_NICE_VIEW_HID_MEDIA_SCROLL)
 static bool any_widget_needs_scroll(void) {
     struct zmk_widget_status *w;
@@ -539,6 +554,9 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
 #endif
 
     redraw_widget(widget);
+
+    k_work_schedule_for_queue(zmk_display_work_q(), &boot_redraw_work, K_SECONDS(3));
+
     return 0;
 }
 
