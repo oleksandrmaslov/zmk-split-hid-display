@@ -3,6 +3,8 @@
 
 #include <zmk/usb.h>
 
+#include <zephyr/sys/util.h>
+
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
@@ -32,6 +34,14 @@ static int set_report_cb(const struct device *dev, struct usb_setup_packet *setu
                 (setup->wValue & HID_GET_REPORT_TYPE_MASK) >> 8);
         return -ENOTSUP;
     }
+    if (*len < 0 || *len > CONFIG_RAW_HID_REPORT_SIZE) {
+        LOG_WRN("USB - Raw HID report too large: %d", *len);
+        return -EMSGSIZE;
+    }
+    if (*len > 0 && (data == NULL || *data == NULL)) {
+        LOG_WRN("USB - Raw HID report has no payload");
+        return -EINVAL;
+    }
 
     LOG_INF("USB - Received Raw HID report of length %i", *len);
     LOG_HEXDUMP_DBG(*data, *len, "USB - Received Raw HID report");
@@ -47,11 +57,27 @@ static const struct hid_ops ops = {
 };
 
 static void send_report(const uint8_t *data, uint8_t len) {
-    k_sem_take(&hid_sem, K_MSEC(30));
+    if (data == NULL) {
+        LOG_WRN("USB - Ignoring Raw HID report with no data");
+        return;
+    }
+    if (raw_hid_dev == NULL) {
+        LOG_WRN("USB - Raw HID device is not ready");
+        return;
+    }
+    if (k_sem_take(&hid_sem, K_MSEC(30)) != 0) {
+        LOG_WRN("USB - Raw HID endpoint is busy; dropping report");
+        return;
+    }
 
     LOG_INF("USB - Sending Raw HID report of length %i", len);
     uint8_t report[CONFIG_RAW_HID_REPORT_SIZE] = {0};
-    memcpy(report, data, len);
+    uint8_t copy_len = MIN(len, (uint8_t)CONFIG_RAW_HID_REPORT_SIZE);
+    if (copy_len != len) {
+        LOG_WRN("USB - Truncating Raw HID report from %u to %u bytes", (unsigned int)len,
+                (unsigned int)copy_len);
+    }
+    memcpy(report, data, copy_len);
     LOG_HEXDUMP_DBG(report, CONFIG_RAW_HID_REPORT_SIZE, "USB - Sending Raw HID report");
 
     int err = hid_int_ep_write(raw_hid_dev, report, CONFIG_RAW_HID_REPORT_SIZE, NULL);
