@@ -127,6 +127,10 @@ BT_GATT_SERVICE_DEFINE(
     BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_CTRL_POINT, BT_GATT_CHRC_WRITE_WITHOUT_RESP,
                            BT_GATT_PERM_WRITE, NULL, write_ctrl_point, &ctrl_point));
 
+/* BT_GATT_CHARACTERISTIC expands to a declaration and value attribute. Zephyr
+ * accepts the declaration here and resolves its value handle for notify. */
+#define RAW_HOG_INPUT_CHRC_ATTR_INDEX 5
+
 static void send_report(const uint8_t *data, uint8_t len) {
     if (data == NULL) {
         LOG_WRN("BT - Ignoring Raw HID report with no data");
@@ -140,18 +144,18 @@ static void send_report(const uint8_t *data, uint8_t len) {
     }
 
     LOG_INF("BT - Sending Raw HID report of length %i", len);
-    uint8_t report[CONFIG_RAW_HID_REPORT_SIZE] = {0};
-    uint8_t copy_len = MIN(len, (uint8_t)CONFIG_RAW_HID_REPORT_SIZE);
-    if (copy_len != len) {
-        LOG_WRN("BT - Truncating Raw HID report from %u to %u bytes", (unsigned int)len,
-                (unsigned int)copy_len);
+    if (len > CONFIG_RAW_HID_REPORT_SIZE) {
+        LOG_WRN("BT - Dropping oversized Raw HID report (%u bytes)", (unsigned int)len);
+        bt_conn_unref(conn);
+        return;
     }
-    memcpy(report, data, copy_len);
+    uint8_t report[CONFIG_RAW_HID_REPORT_SIZE] = {0};
+    memcpy(report, data, len);
     LOG_HEXDUMP_DBG(report, CONFIG_RAW_HID_REPORT_SIZE, "BT - Sending Raw HID report");
 
     struct bt_gatt_notify_params notify_params = {
-        .attr = &raw_hog_svc.attrs[5],
-        .data = &report,
+        .attr = &raw_hog_svc.attrs[RAW_HOG_INPUT_CHRC_ATTR_INDEX],
+        .data = report,
         .len = CONFIG_RAW_HID_REPORT_SIZE,
     };
 

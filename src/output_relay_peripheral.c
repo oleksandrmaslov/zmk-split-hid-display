@@ -6,6 +6,7 @@
 
 #define DT_DRV_COMPAT zmk_split_peripheral_output_relay
 
+#include <errno.h>
 #include <stddef.h>
 #include <string.h>
 #include <zephyr/drivers/sensor.h>
@@ -36,25 +37,28 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #if IS_ENABLED(CONFIG_ZMK_SPLT_PERIPHERAL_OUTPUT_RELAY)
 
-static struct zmk_split_bt_output_relay_event split_output_run_payload;
-
 #ifdef CONFIG_RAW_HID_SPLIT_RELAY_CHANNEL
+#define RAW_HID_REASSEMBLY_TIMEOUT_MS 5000
+
 static uint8_t raw_hid_reassembly_buf[CONFIG_RAW_HID_REPORT_SIZE];
 static uint8_t raw_hid_reassembly_sequence;
 static uint8_t raw_hid_reassembly_total;
 static uint8_t raw_hid_reassembly_received;
 static bool raw_hid_reassembly_active;
+static int64_t raw_hid_reassembly_deadline;
 
 static void reset_raw_hid_reassembly(void) {
     raw_hid_reassembly_sequence = 0;
     raw_hid_reassembly_total = 0;
     raw_hid_reassembly_received = 0;
     raw_hid_reassembly_active = false;
+    raw_hid_reassembly_deadline = 0;
 }
 
 static ssize_t handle_raw_hid_relay_payload(const struct zmk_split_bt_output_relay_event *in_ev,
                                             uint8_t payload_size, uint16_t len) {
     if (in_ev->value != RAW_HID_SPLIT_CHUNK_VALUE) {
+        reset_raw_hid_reassembly();
         if (payload_size == 0) {
             LOG_WRN("Raw HID relay received with empty payload");
             return len;
@@ -63,6 +67,12 @@ static ssize_t handle_raw_hid_relay_payload(const struct zmk_split_bt_output_rel
         raise_raw_hid_received_event(
             (struct raw_hid_received_event){.data = in_ev->payload, .length = payload_size});
         return len;
+    }
+
+    const int64_t now = k_uptime_get();
+    if (raw_hid_reassembly_active && now >= raw_hid_reassembly_deadline) {
+        LOG_WRN("Raw HID chunk reassembly timed out");
+        reset_raw_hid_reassembly();
     }
 
     if (payload_size <= RAW_HID_SPLIT_CHUNK_HEADER_SIZE) {
@@ -101,6 +111,7 @@ static ssize_t handle_raw_hid_relay_payload(const struct zmk_split_bt_output_rel
     memcpy(&raw_hid_reassembly_buf[offset],
            &in_ev->payload[RAW_HID_SPLIT_CHUNK_HEADER_SIZE], chunk_len);
     raw_hid_reassembly_received += chunk_len;
+    raw_hid_reassembly_deadline = now + RAW_HID_REASSEMBLY_TIMEOUT_MS;
 
     if (raw_hid_reassembly_received == raw_hid_reassembly_total) {
         raise_raw_hid_received_event((struct raw_hid_received_event){
@@ -150,7 +161,9 @@ const struct device* virtual_output_device_get_for_relay_channel(uint8_t relay_c
 static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gatt_attr *attrs,
                                        const void *buf, uint16_t len, uint16_t offset,
                                        uint8_t flags) {
-    uint8_t *data = attrs->user_data;
+    ARG_UNUSED(conn);
+    ARG_UNUSED(attrs);
+    ARG_UNUSED(flags);
 
     LOG_DBG("offset %d len %d", offset, len);
 
@@ -159,14 +172,11 @@ static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gat
     }
 
     if (len < offsetof(struct zmk_split_bt_output_relay_event, payload) ||
-        len > sizeof(struct zmk_split_bt_output_relay_event)) {
+        len > sizeof(struct zmk_split_bt_output_relay_event) || buf == NULL) {
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
     }
 
-    memcpy(data, buf, len);
-
-    struct zmk_split_bt_output_relay_event *in_ev
-            = (struct zmk_split_bt_output_relay_event *)data;
+    const struct zmk_split_bt_output_relay_event *in_ev = buf;
     const uint8_t payload_size =
         MIN(in_ev->payload_size,
             (uint8_t)MIN((uint16_t)ZMK_SPLIT_PERIPHERAL_OUTPUT_PAYLOAD_MAX,
@@ -191,7 +201,18 @@ static ssize_t split_svc_update_output(struct bt_conn *conn, const struct bt_gat
     ev.payload_size = payload_size;
     memcpy(ev.payload, in_ev->payload, ev.payload_size);
 
-    k_msgq_put(&peripheral_output_event_msgq, &ev, K_NO_WAIT);
+    int err = k_msgq_put(&peripheral_output_event_msgq, &ev, K_NO_WAIT);
+    if (err == -ENOMSG) {
+        struct zmk_split_output_event discarded_event;
+        LOG_WRN("Peripheral output queue full, dropping oldest event");
+        (void)k_msgq_get(&peripheral_output_event_msgq, &discarded_event, K_NO_WAIT);
+        err = k_msgq_put(&peripheral_output_event_msgq, &ev, K_NO_WAIT);
+    }
+    if (err) {
+        LOG_WRN("Failed to queue peripheral output event (%d)", err);
+        return len;
+    }
+
     k_work_submit(&peripheral_output_event_work);
 
     return len;
@@ -204,7 +225,7 @@ BT_GATT_SERVICE_DEFINE(
 #if IS_ENABLED(CONFIG_ZMK_SPLT_PERIPHERAL_OUTPUT_RELAY)
     BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_128(ZMK_SPLIT_BT_OR_CHAR_OUTPUT_STATE_UUID),
                            BT_GATT_CHRC_WRITE_WITHOUT_RESP, BT_GATT_PERM_WRITE_ENCRYPT, NULL,
-                           split_svc_update_output, &split_output_run_payload),
+                           split_svc_update_output, NULL),
 #endif /* IS_ENABLED(CONFIG_ZMK_SPLT_PERIPHERAL_OUTPUT_RELAY) */
 );
 
