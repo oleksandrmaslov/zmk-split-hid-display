@@ -111,23 +111,33 @@ static void draw_output_indicator(lv_obj_t *canvas, const struct status_state *s
 
 static void get_layout_text(uint8_t layout_index, char *out, size_t out_size) {
 #if IS_ENABLED(CONFIG_NICE_VIEW_HID_SHOW_LAYOUT)
-    char buf[sizeof(CONFIG_NICE_VIEW_HID_LAYOUTS)];
-    strncpy(buf, CONFIG_NICE_VIEW_HID_LAYOUTS, sizeof(buf));
-    buf[sizeof(buf) - 1] = '\0';
+    if (out_size == 0) return;
 
-    char *layout = strtok(buf, ",");
-    size_t i = 0;
-    while (layout != NULL && i < layout_index) {
-        i++;
-        layout = strtok(NULL, ",");
+    const char *layout = CONFIG_NICE_VIEW_HID_LAYOUTS;
+    size_t current_index = 0;
+    while (*layout != '\0') {
+        while (*layout == ',') layout++;
+        if (*layout == '\0') break;
+
+        const char *end = layout;
+        while (*end != '\0' && *end != ',') end++;
+
+        if (current_index == layout_index) {
+            const size_t copy_len = MIN((size_t)(end - layout), out_size - 1);
+            memcpy(out, layout, copy_len);
+            out[copy_len] = '\0';
+            goto uppercase;
+        }
+
+        current_index++;
+        layout = end;
     }
 
-    if (layout != NULL) {
-        snprintf(out, out_size, "%s", layout);
-    } else {
+    {
         snprintf(out, out_size, "%u", layout_index);
     }
 
+uppercase:
     /* upper-case for display */
     for (size_t j = 0; out[j] != '\0' && j + 1 < out_size; j++) {
         if (out[j] >= 'a' && out[j] <= 'z') {

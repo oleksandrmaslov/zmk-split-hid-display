@@ -163,28 +163,55 @@ static const char *fallback_artist(const struct status_state *state) {
  * slide across the visible axial run and wrap around seamlessly. When the text
  * already fits, we render it statically at offset 0 (no animation cost).
  */
-static size_t utf8_char_advance(const char *s) {
-    if (s == NULL || *s == '\0') return 0;
-    uint8_t b = (uint8_t)*s;
-    if (b < 0x80) return 1;
-    if ((b & 0xE0) == 0xC0) return 2;
-    if ((b & 0xF0) == 0xE0) return 3;
-    if ((b & 0xF8) == 0xF0) return 4;
-    return 1; /* invalid — advance by 1 to make progress */
+static bool utf8_is_continuation(uint8_t byte) { return (byte & 0xC0) == 0x80; }
+
+static size_t utf8_char_advance(const char *s, size_t remaining) {
+    if (s == NULL || remaining == 0 || *s == '\0') return 0;
+
+    const uint8_t first = (uint8_t)s[0];
+    size_t width;
+    if (first < 0x80) {
+        return 1;
+    } else if (first >= 0xC2 && first <= 0xDF) {
+        width = 2;
+    } else if (first >= 0xE0 && first <= 0xEF) {
+        width = 3;
+    } else if (first >= 0xF0 && first <= 0xF4) {
+        width = 4;
+    } else {
+        return 1;
+    }
+
+    if (width > remaining) {
+        return 1;
+    }
+    for (size_t i = 1; i < width; i++) {
+        if (!utf8_is_continuation((uint8_t)s[i])) {
+            return 1;
+        }
+    }
+
+    return width;
 }
 
 static size_t utf8_strlen(const char *s) {
+    if (s == NULL) return 0;
+
+    const char *end = s + strlen(s);
     size_t n = 0;
-    while (s != NULL && *s) {
-        s += utf8_char_advance(s);
+    while (s < end) {
+        s += utf8_char_advance(s, (size_t)(end - s));
         n++;
     }
     return n;
 }
 
 static const char *utf8_advance_chars(const char *s, size_t chars) {
-    while (chars > 0 && s != NULL && *s) {
-        s += utf8_char_advance(s);
+    if (s == NULL) return NULL;
+
+    const char *end = s + strlen(s);
+    while (chars > 0 && s < end) {
+        s += utf8_char_advance(s, (size_t)(end - s));
         chars--;
     }
     return s;
