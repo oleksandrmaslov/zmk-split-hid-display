@@ -8,6 +8,7 @@
 #include <zmk/split/output-relay/event.h>
 
 #include <zephyr/bluetooth/att.h>
+#include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 
@@ -22,9 +23,10 @@ enum {
 };
 
 static uint8_t next_sequence;
+static K_MUTEX_DEFINE(raw_hid_split_forward_mutex);
 
 static uint8_t raw_hid_logical_length(const struct raw_hid_received_event *event) {
-    if (event->length == 0) {
+    if (event == NULL || event->data == NULL || event->length == 0) {
         return 0;
     }
 
@@ -74,12 +76,13 @@ static int forward_raw_hid_chunks(const uint8_t *payload, uint8_t payload_size,
     const uint8_t chunk_data_cap = safe_payload_cap - RAW_HID_SPLIT_CHUNK_HEADER_SIZE;
     const uint8_t sequence = next_sequence++;
 
-    for (uint8_t offset = 0; offset < payload_size; offset += chunk_data_cap) {
+    for (uint16_t offset = 0; offset < payload_size; offset += chunk_data_cap) {
         uint8_t chunk_buf[ZMK_SPLIT_PERIPHERAL_OUTPUT_PAYLOAD_MAX] = {0};
-        uint8_t chunk_len = MIN(chunk_data_cap, (uint8_t)(payload_size - offset));
+        uint8_t chunk_len =
+            (uint8_t)MIN((uint16_t)chunk_data_cap, (uint16_t)(payload_size - offset));
 
         chunk_buf[0] = sequence;
-        chunk_buf[1] = offset;
+        chunk_buf[1] = (uint8_t)offset;
         chunk_buf[2] = payload_size;
         memcpy(&chunk_buf[RAW_HID_SPLIT_CHUNK_HEADER_SIZE], &payload[offset], chunk_len);
 
@@ -107,9 +110,15 @@ static int raw_hid_split_forward_listener(const zmk_event_t *eh) {
 
     uint8_t safe_payload_cap = raw_hid_split_payload_cap();
 
+    /* USB control writes and BLE GATT writes can raise events concurrently.
+     * Keep a complete split report contiguous for the peripheral's single
+     * reassembly state. */
+    k_mutex_lock(&raw_hid_split_forward_mutex, K_FOREVER);
     int err = payload_size <= safe_payload_cap
                   ? forward_raw_hid_payload(event->data, payload_size)
                   : forward_raw_hid_chunks(event->data, payload_size, safe_payload_cap);
+    k_mutex_unlock(&raw_hid_split_forward_mutex);
+
     if (err) {
         LOG_ERR("Failed to forward Raw HID payload to peripheral (err %d)", err);
     }

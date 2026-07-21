@@ -96,7 +96,8 @@ static const lv_image_dsc_t usb_logo = {
 };
 
 /*
- * Custom UI bitmaps prepared by the user (references/*.c). The original
+ * Custom UI bitmaps prepared by the user (the C sources under references/).
+ * The original
  * arrays were exported in LVGL 8 LV_IMG_CF_ALPHA_1BIT layout (no palette,
  * 1 bit/pixel, MSB first, padded to byte). We re-wrap that same pixel data
  * with the LVGL 9 LV_COLOR_FORMAT_I1 palette prefix used elsewhere in this

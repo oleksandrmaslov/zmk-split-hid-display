@@ -38,6 +38,7 @@ config RAW_HID_USAGE
 
 config RAW_HID_REPORT_SIZE
     int "Raw HID Report Size"
+    range 1 255
     default 32
     depends on RAW_HID
 

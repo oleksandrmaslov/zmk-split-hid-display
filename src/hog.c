@@ -4,6 +4,7 @@
 #include <zmk/ble.h>
 
 #include <zephyr/bluetooth/gatt.h>
+#include <zephyr/sys/util.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
@@ -72,6 +73,10 @@ static ssize_t write_hids_raw_hid_report(struct bt_conn *conn, const struct bt_g
     if (offset != 0) {
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
     }
+    if (len > CONFIG_RAW_HID_REPORT_SIZE) {
+        LOG_WRN("BT - Raw HID report too large: %u", (unsigned int)len);
+        return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
+    }
 
     uint8_t *data = (uint8_t *)buf;
     LOG_INF("BT - Received Raw HID report of length %i", len);
@@ -122,7 +127,16 @@ BT_GATT_SERVICE_DEFINE(
     BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_CTRL_POINT, BT_GATT_CHRC_WRITE_WITHOUT_RESP,
                            BT_GATT_PERM_WRITE, NULL, write_ctrl_point, &ctrl_point));
 
+/* BT_GATT_CHARACTERISTIC expands to a declaration and value attribute. Zephyr
+ * accepts the declaration here and resolves its value handle for notify. */
+#define RAW_HOG_INPUT_CHRC_ATTR_INDEX 5
+
 static void send_report(const uint8_t *data, uint8_t len) {
+    if (data == NULL) {
+        LOG_WRN("BT - Ignoring Raw HID report with no data");
+        return;
+    }
+
     struct bt_conn *conn = zmk_ble_active_profile_conn();
     if (conn == NULL) {
         LOG_ERR("Not connected to active profile");
@@ -130,13 +144,18 @@ static void send_report(const uint8_t *data, uint8_t len) {
     }
 
     LOG_INF("BT - Sending Raw HID report of length %i", len);
+    if (len > CONFIG_RAW_HID_REPORT_SIZE) {
+        LOG_WRN("BT - Dropping oversized Raw HID report (%u bytes)", (unsigned int)len);
+        bt_conn_unref(conn);
+        return;
+    }
     uint8_t report[CONFIG_RAW_HID_REPORT_SIZE] = {0};
     memcpy(report, data, len);
     LOG_HEXDUMP_DBG(report, CONFIG_RAW_HID_REPORT_SIZE, "BT - Sending Raw HID report");
 
     struct bt_gatt_notify_params notify_params = {
-        .attr = &raw_hog_svc.attrs[5],
-        .data = &report,
+        .attr = &raw_hog_svc.attrs[RAW_HOG_INPUT_CHRC_ATTR_INDEX],
+        .data = report,
         .len = CONFIG_RAW_HID_REPORT_SIZE,
     };
 
@@ -161,18 +180,3 @@ static int raw_hid_sent_event_listener(const zmk_event_t *eh) {
 
 ZMK_LISTENER(bt_process_raw_hid_sent_event, raw_hid_sent_event_listener);
 ZMK_SUBSCRIPTION(bt_process_raw_hid_sent_event, raw_hid_sent_event);
-
-K_THREAD_STACK_DEFINE(raw_hog_q_stack, CONFIG_ZMK_BLE_THREAD_STACK_SIZE);
-
-struct k_work_q raw_hog_work_q;
-
-static int raw_hog_init(void) {
-
-    static const struct k_work_queue_config queue_config = {.name = "HID Over GATT Send Work"};
-    k_work_queue_start(&raw_hog_work_q, raw_hog_q_stack, K_THREAD_STACK_SIZEOF(raw_hog_q_stack),
-                       CONFIG_ZMK_BLE_THREAD_PRIORITY, &queue_config);
-
-    return 0;
-}
-
-SYS_INIT(raw_hog_init, APPLICATION, CONFIG_ZMK_BLE_INIT_PRIORITY);
