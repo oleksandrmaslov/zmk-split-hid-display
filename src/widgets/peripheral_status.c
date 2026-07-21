@@ -138,7 +138,7 @@ static void draw_header(lv_obj_t *canvas, const struct status_state *state) {
 static const char *fallback_title(const struct status_state *state) {
 #if IS_ENABLED(CONFIG_RAW_HID)
     if (!state->connected) return "Waiting link";
-    if (!state->is_connected) return "Connect RAW HID";
+    if (!state->is_connected) return "Connect";
     return state->media_title[0] ? state->media_title : "Now playing";
 #else
     return state->connected ? "Connected" : "Disconnected";
@@ -148,8 +148,8 @@ static const char *fallback_title(const struct status_state *state) {
 static const char *fallback_artist(const struct status_state *state) {
 #if IS_ENABLED(CONFIG_RAW_HID)
     if (!state->connected) return "Split offline";
-    if (!state->is_connected) return "Waiting host";
-    return state->media_artist[0] ? state->media_artist : " ";
+    if (!state->is_connected) return "RAW HID";
+    return state->media_artist[0] ? state->media_artist : "Media ready";
 #else
     ARG_UNUSED(state);
     return "";
