@@ -2,5 +2,11 @@ name: Build ZMK firmware
 on: [push, pull_request, workflow_dispatch]
 
 jobs:
+  test-ble-reports:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tests/check_ble_reports.py
+
   build:
     uses: zmkfirmware/zmk/.github/workflows/build-user-config.yml@main

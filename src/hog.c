@@ -73,15 +73,23 @@ static ssize_t write_hids_raw_hid_report(struct bt_conn *conn, const struct bt_g
     if (offset != 0) {
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
     }
-    if (len > CONFIG_RAW_HID_REPORT_SIZE) {
-        LOG_WRN("BT - Raw HID report too large: %u", (unsigned int)len);
+
+    const uint8_t *data = buf;
+    uint16_t payload_len = len;
+    /* Linux UHID can leave the zero report ID on unnumbered BLE output reports. */
+    if (payload_len == CONFIG_RAW_HID_REPORT_SIZE + 1 && data[0] == 0) {
+        data++;
+        payload_len--;
+    }
+    if (payload_len > CONFIG_RAW_HID_REPORT_SIZE) {
+        LOG_WRN("BT - Raw HID report too large: %u", (unsigned int)payload_len);
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
     }
 
-    uint8_t *data = (uint8_t *)buf;
-    LOG_INF("BT - Received Raw HID report of length %i", len);
-    LOG_HEXDUMP_DBG(data, len, "BT - Received Raw HID report");
-    raise_raw_hid_received_event((struct raw_hid_received_event){.data = data, .length = len});
+    LOG_INF("BT - Received Raw HID report of length %i", payload_len);
+    LOG_HEXDUMP_DBG(data, payload_len, "BT - Received Raw HID report");
+    raise_raw_hid_received_event(
+        (struct raw_hid_received_event){.data = data, .length = payload_len});
 
     return len;
 }

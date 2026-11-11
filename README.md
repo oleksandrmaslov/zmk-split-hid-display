@@ -169,6 +169,13 @@ The keyboard Raw HID interface uses:
 - Usage: `0x61`
 - Report size: `CONFIG_RAW_HID_REPORT_SIZE`, default `32`
 
+The report size counts payload bytes. HIDAPI writes include a leading zero
+report-ID byte for this unnumbered interface. Some Linux Bluetooth stacks leave
+that byte on the BLE write; the module removes it only when the write is exactly
+one byte larger than the configured report size and starts with zero. Normal
+reports are passed through unchanged, and other oversized reports are rejected.
+No keyboard configuration override or kernel patch is needed.
+
 The companion app is expected to send these message IDs:
 
 | ID | Payload | Meaning |
@@ -180,6 +187,10 @@ The companion app is expected to send these message IDs:
 | `0xAE` | `0xAE, length, text...` | Media title |
 
 Text payloads are UTF-8 and are clipped to the configured Raw HID report size.
+
+Run the BLE receive regression check with `python3 tests/check_ble_reports.py`.
+It requires a C compiler and checks native and zero-prefixed reports, payload
+alignment, ATT write return lengths, invalid offsets, and size limits.
 
 ## Output Relay Changes
 
